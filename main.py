@@ -47,6 +47,8 @@ try:
                 for tl in traffic_lights:
                     actions[tl] = agents[tl].select_action(states[tl])
 
+                print(f"Actions: stay={list(actions.values()).count(0)}, switch={list(actions.values()).count(1)}")
+
                 for tl in traffic_lights:
                     change_state(tl, actions[tl])
 
