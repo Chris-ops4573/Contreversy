@@ -1,7 +1,6 @@
 import traci
 
 import subprocess
-import random
 import os
 
 #Sumo helpers start here
@@ -16,9 +15,8 @@ def generate_routes():
         "-n", "grid_3.net.xml",
         "-r", "routes.rou.xml",
         "-e", "30000",
-        "--period", "6",
-        "--validate",
-        "--seed", str(random.randint(0,100000))
+        "--period", "4",
+        "--validate"
     ])
 
 def start_sumo():
