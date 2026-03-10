@@ -1,23 +1,26 @@
+import torch
 import traci
 from traci.exceptions import FatalTraCIError
-
-from helper import show_reward, get_reward, change_state, get_state, get_vehicle_mapping, get_traffic_lights, manual_configure_TL, generate_routes, start_sumo
-from neural_net import target_model, model, optimizer, buffer, Agent
+from helper import get_reward, change_state, get_state, get_traffic_lights, manual_configure_TL, generate_routes, start_sumo
+from neural_net import TrafficAgent, ReplayBuffer, Agent
 
 try:
     generate_routes()
     start_sumo()
-
     traffic_lights = get_traffic_lights()
     manual_configure_TL(traffic_lights)
 
-    reward_sum = 0
-    reward_count = 0
-
     agents = {}
-
     for tl in traffic_lights:
-        agents[tl] = Agent(model, target_model, optimizer, buffer)
+        state_dim = len(get_state(tl))  
+        action_dim = 2
+
+        model = TrafficAgent(state_dim, action_dim)
+        model_next = TrafficAgent(state_dim, action_dim)
+        model_next.load_state_dict(model.state_dict())
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.00005)
+        buffer = ReplayBuffer()
+        agents[tl] = Agent(model, model_next, optimizer, buffer, tl)
 
     if traci.isLoaded():
         traci.close()
@@ -38,16 +41,11 @@ try:
 
         step = 10
         time = 0
-        
-        while traci.simulation.getMinExpectedNumber() > 0:    
-            
+
+        while traci.simulation.getMinExpectedNumber() > 0:
+
             if time % step == 0:
-                actions = {}
-
-                for tl in traffic_lights:
-                    actions[tl] = agents[tl].select_action(states[tl])
-
-                print(f"Actions: stay={list(actions.values()).count(0)}, switch={list(actions.values()).count(1)}")
+                actions = {tl: agents[tl].select_action(states[tl]) for tl in traffic_lights}
 
                 for tl in traffic_lights:
                     change_state(tl, actions[tl])
@@ -55,24 +53,27 @@ try:
                 next_states = {tl: get_state(tl) for tl in traffic_lights}
                 rewards = {tl: get_reward(tl) for tl in traffic_lights}
 
+                done = traci.simulation.getMinExpectedNumber() == 0
+
                 reward_sum += sum(rewards.values())
                 reward_count += len(rewards)
 
                 if time % 1000 == 0:
-                    show_reward(reward_sum, reward_count, time)
+                    avg = reward_sum / reward_count
+                    print(f"Step: {time}, Average reward: {avg}")
+                    
                     reward_sum = 0
                     reward_count = 0
 
                 for tl in traffic_lights:
-                    buffer.push(
+                    agents[tl].buffer.push(
                         states[tl],
                         actions[tl],
                         rewards[tl],
                         next_states[tl],
-                        False if time != 30000 else True
+                        done
                     )
-
-                agents[traffic_lights[0]].train()
+                    agents[tl].train()
 
                 states = next_states
 
@@ -83,7 +84,7 @@ try:
             traci.close()
 
         count += 1
-        print("Episode ", count, " over, starting new episode...")
+        print(f"Episode {count} over, starting new episode...")
 
 except FatalTraCIError:
     print("Sumo stopped by user")

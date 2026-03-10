@@ -45,11 +45,12 @@ class ReplayBuffer:
         )
 
 class Agent:
-    def __init__(self, model, target_model, optimizer, buffer):
+    def __init__(self, model, target_model, optimizer, buffer, name):
         self.model = model
         self.target_model = target_model
         self.optimizer = optimizer
         self.buffer = buffer
+        self.name = name
 
         self.gamma = 0.99
         self.epsilon = 1.0
@@ -100,16 +101,7 @@ class Agent:
             print(f"Steps: {self.train_steps}, epsilon: {self.epsilon:.4f}, buffer: {len(self.buffer)}, Loss: {loss.item():.4f}")
 
         if self.train_steps % 100000 == 0:
-            torch.save(self.model.state_dict(), "traffic_model_pressure.pt")
+            torch.save(self.model.state_dict(), "traffic_model" + self.name + ".pt")
 
         if self.epsilon > self.eps_min:
             self.epsilon *= self.eps_decay
-
-state_dim = 13
-action_dim = 2
-
-model = TrafficAgent(state_dim, action_dim)
-target_model = TrafficAgent(state_dim, action_dim)
-target_model.load_state_dict(model.state_dict())
-optimizer = torch.optim.Adam(model.parameters(), lr=0.00005)
-buffer = ReplayBuffer()
