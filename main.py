@@ -31,6 +31,7 @@ try:
         generate_routes()
         start_sumo()
 
+
         traffic_lights = get_traffic_lights()
         manual_configure_TL(traffic_lights)
 

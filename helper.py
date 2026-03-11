@@ -15,13 +15,13 @@ def generate_routes():
         "-n", "grid_3.net.xml",
         "-r", "routes.rou.xml",
         "-e", "30000",
-        "--period", "4",
+        "--period", "3",
         "--validate"
     ])
 
 def start_sumo():
     sudoCmd = [
-        "sumo", 
+        "sumo-gui", 
          "-c", "sim_3.sumocfg",
          "--no-step-log",
         "--no-warnings",
