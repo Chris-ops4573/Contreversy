@@ -11,7 +11,7 @@ def load_agents(traffic_lights):
     for tl in traffic_lights:
         state_dim = len(get_state(tl))
         model = TrafficAgent(state_dim, 2)
-        model.load_state_dict(torch.load(f"traffic_model{tl}.pt"))
+        model.load_state_dict(torch.load(f"models/traffic_model{tl}.pt"))
         model.eval()
 
         target = TrafficAgent(state_dim, 2)
@@ -62,9 +62,15 @@ try:
         traci.simulationStep()
         time += 1
 
+except KeyboardInterrupt:
+    print("Sumo stopped by user")
+
 except FatalTraCIError:
     print("Sumo stopped")
 
 finally:
-    if traci.isLoaded():
-        traci.close()
+    try:
+        if traci.isLoaded():
+            traci.close()
+    except Exception:
+        pass

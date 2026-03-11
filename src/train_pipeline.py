@@ -1,10 +1,13 @@
 import torch
 import traci
 from traci.exceptions import FatalTraCIError
+import os
+
 from helper import get_reward, change_state, get_state, get_traffic_lights, manual_configure_TL, generate_routes, start_sumo
 from neural_net import TrafficAgent, ReplayBuffer, Agent
 
 try:
+    os.makedirs("models", exist_ok=True)
     generate_routes()
     start_sumo()
     traffic_lights = get_traffic_lights()
@@ -87,9 +90,15 @@ try:
         count += 1
         print(f"Episode {count} over, starting new episode...")
 
+except KeyboardInterrupt:
+    print("Sumo stopped by user")
+
 except FatalTraCIError:
     print("Sumo stopped by user")
 
 finally:
-    if traci.isLoaded():
-        traci.close()
+    try:
+        if traci.isLoaded():
+            traci.close()
+    except Exception:
+        pass

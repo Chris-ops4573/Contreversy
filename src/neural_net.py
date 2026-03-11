@@ -101,7 +101,7 @@ class Agent:
             print(f"Steps: {self.train_steps}, epsilon: {self.epsilon:.4f}, buffer: {len(self.buffer)}, Loss: {loss.item():.4f}")
 
         if self.train_steps % 100000 == 0:
-            torch.save(self.model.state_dict(), "traffic_model" + self.name + ".pt")
+            torch.save(self.model.state_dict(), f"models/traffic_model{self.name}.pt")
 
         if self.epsilon > self.eps_min:
             self.epsilon *= self.eps_decay

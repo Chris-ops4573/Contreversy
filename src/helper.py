@@ -12,17 +12,18 @@ def generate_routes():
     subprocess.run([
         "python", 
         random_trips,
-        "-n", "grid_3.net.xml",
-        "-r", "routes.rou.xml",
+        "-n", "SUMO/grid_3.net.xml",
+        "-r", "SUMO/routes.rou.xml",
+        "-o", "SUMO/trips.trips.xml",
         "-e", "30000",
-        "--period", "3",
+        "--period", "4",
         "--validate"
     ])
 
 def start_sumo():
     sudoCmd = [
-        "sumo-gui", 
-         "-c", "sim_3.sumocfg",
+        "sumo", 
+         "-c", "SUMO/sim_3.sumocfg",
          "--no-step-log",
         "--no-warnings",
         "--start"
