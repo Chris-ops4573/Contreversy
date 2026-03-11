@@ -2,27 +2,37 @@
 
 ## Overview
 
-This project implements a **Deep Reinforcement Learning system for traffic signal control** using the **SUMO (Simulation of Urban MObility)** traffic simulator and **PyTorch**.
+This project implements a **Deep Reinforcement Learning (DRL) system for adaptive traffic signal control** using:
 
-The system trains **independent RL agents for each traffic light** in a road network. Each agent observes the local traffic conditions and learns when to change the signal phase to reduce congestion.
+- **SUMO (Simulation of Urban MObility)**
+- **TraCI API**
+- **PyTorch**
 
-The current environment uses a **3×3 grid road network**, where traffic signals are placed automatically at intersections. Vehicles are generated dynamically for each episode, and agents learn through repeated interaction with the simulation.
+Each traffic light in the road network is controlled by an **independent Deep Q-Network (DQN) agent**. The agents observe local traffic conditions and learn when to **change or maintain the current signal phase** in order to **reduce congestion and queue lengths**.
 
-The objective of the RL agents is to **minimize vehicle queue lengths at intersections**.
+The current simulation environment uses a **3×3 grid road network** where traffic signals are automatically generated at intersections. Vehicles are dynamically generated for each episode, allowing agents to learn under varying traffic conditions.
+
+The system supports both:
+
+- **Training mode** (learning traffic policies)
+- **Evaluation mode** (running trained models)
 
 ---
 
-# Current Features
+# Features
 
-* SUMO traffic simulation environment
-* 3×3 grid road network
-* Multi-agent reinforcement learning (one agent per traffic light)
-* Deep Q-Network (DQN) implementation using PyTorch
-* Experience replay buffer
-* Target network for stable learning
-* Epsilon-greedy exploration
-* Dynamic vehicle generation each episode
-* Python control using TraCI
+- SUMO traffic simulation environment
+- 3×3 grid road network
+- Multi-agent reinforcement learning
+- Independent agent per traffic signal
+- Deep Q-Network (DQN) implementation
+- Experience replay buffer
+- Target network for stable Q-learning
+- Epsilon-greedy exploration
+- Dynamic vehicle generation each episode
+- Training and testing pipelines
+- Model checkpoint saving
+- TraCI based traffic control
 
 ---
 
@@ -31,15 +41,27 @@ The objective of the RL agents is to **minimize vehicle queue lengths at interse
 ```
 Traffic_optimization/
 │
-├── main.py               # Training loop and SUMO simulation control
-├── helper.py             # SUMO helper functions and state/reward logic
-├── neural_net.py         # Neural network, replay buffer, and RL agent
+├── models/                     # Saved neural network weights
+│   ├── traffic_modelA1.pt
+│   ├── traffic_modelB0.pt
+│   ├── traffic_modelB1.pt
+│   ├── traffic_modelB2.pt
+│   └── traffic_modelC1.pt
 │
-├── sim_3.sumocfg         # SUMO simulation configuration
-├── grid_3.net.xml        # Generated grid road network
-├── routes.rou.xml        # Generated vehicle routes (auto-generated)
+├── src/
+│   ├── helper.py               # SUMO interaction utilities
+│   ├── neural_net.py           # Neural networks, agents, replay buffer
+│   ├── train_pipeline.py       # RL training loop
+│   └── test_pipeline.py        # Run trained agents
 │
-├── .venv/                # Python virtual environment
+├── SUMO/
+│   ├── grid_3.net.xml          # Road network
+│   ├── routes.rou.xml          # Generated vehicle routes
+│   ├── trips.trips.xml         # Generated trips
+│   └── sim_3.sumocfg           # SUMO simulation configuration
+│
+├── .venv/                      # Python virtual environment
+├── .gitignore
 └── README.md
 ```
 
@@ -63,7 +85,7 @@ sumo --version
 
 ---
 
-## Set Environment Variables
+# Set Environment Variables
 
 ```
 export SUMO_HOME=/usr/share/sumo
@@ -74,14 +96,23 @@ export PATH=$PATH:$SUMO_HOME/bin
 
 ---
 
-## Create Python Virtual Environment
+# Python Environment Setup
+
+Create a virtual environment:
 
 ```
 python -m venv .venv
+```
+
+Activate it:
+
+Linux / Mac:
+
+```
 source .venv/bin/activate
 ```
 
-Install required packages:
+Install dependencies:
 
 ```
 pip install torch traci sumolib
@@ -105,29 +136,53 @@ netgenerate \
 
 Explanation:
 
-* `--grid` generates a grid road network
-* `--grid.number 3` creates a **3×3 grid**
-* `--tls.guess` automatically adds traffic lights
-* `--tls.guess.threshold 10` avoids adding lights to trivial intersections
-* `--tls.unset` removes unnecessary corner traffic lights
+- `--grid` generates a grid road network
+- `--grid.number 3` creates a **3×3 grid**
+- `--tls.guess` automatically adds traffic lights
+- `--tls.guess.threshold 10` avoids lights at trivial intersections
+- `--tls.unset` removes unnecessary corner traffic lights
 
 ---
 
 # Running Training
 
-Run the training script:
+Run the training pipeline:
 
 ```
-python main.py
+python src/train_pipeline.py
 ```
 
-The script will:
+The training process:
 
-1. Generate vehicle routes
+1. Generate random vehicle routes
 2. Start the SUMO simulation
-3. Create an RL agent for each traffic light
-4. Train the agents using simulation feedback
-5. Restart the simulation after each episode
+3. Initialize an RL agent for each traffic light
+4. Agents interact with the environment
+5. Experience is stored in replay buffers
+6. Neural networks are trained using sampled batches
+7. Simulation restarts after each episode
+
+Models are periodically saved to:
+
+```
+models/
+```
+
+---
+
+# Running Evaluation
+
+To run the simulation using trained models:
+
+```
+python src/test_pipeline.py
+```
+
+This will:
+
+- Load trained traffic light models
+- Disable exploration (`epsilon = 0`)
+- Run the simulation using learned policies
 
 ---
 
@@ -135,7 +190,13 @@ The script will:
 
 ## Multi-Agent Setup
 
-Each traffic light is controlled by its **own RL agent**. Agents learn independently but interact through the shared traffic environment.
+Each traffic light is controlled by **its own RL agent**.
+
+Agents:
+
+- Observe only **local traffic conditions**
+- Learn independently
+- Interact through the shared traffic environment
 
 ---
 
@@ -143,21 +204,21 @@ Each traffic light is controlled by its **own RL agent**. Agents learn independe
 
 Each agent observes:
 
-1. **Halting vehicles per lane**
+### 1. Halting vehicles per lane
 
 ```
 traci.lane.getLastStepHaltingNumber(lane)
 ```
 
-2. **Downstream lane occupancy**
+### 2. Downstream lane occupancy
 
-This measures congestion in the next lane after the intersection.
+Measures congestion in the lane **after the intersection**.
 
 ```
 traci.lane.getLastStepOccupancy(lane)
 ```
 
-3. **Current traffic light phase**
+### 3. Current traffic light phase
 
 ```
 traci.trafficlight.getPhase(tl_id)
@@ -166,21 +227,23 @@ traci.trafficlight.getPhase(tl_id)
 Final state vector:
 
 ```
-[halting vehicles per lane,
+[
+ halting vehicles per lane,
  downstream occupancy per lane,
- current phase]
+ current phase
+]
 ```
 
 ---
 
 # Action Space
 
-Each agent has **two possible actions**:
+Each agent has **two possible actions**.
 
-| Action | Meaning              |
-| ------ | -------------------- |
-| 0      | Keep current phase   |
-| 1      | Change to next phase |
+| Action | Meaning |
+|------|------|
+| 0 | Keep current phase |
+| 1 | Switch to next phase |
 
 Phase switching:
 
@@ -192,7 +255,7 @@ traci.trafficlight.setPhase(tl, (phase + 1) % 4)
 
 # Reward Function
 
-The reward is designed to **minimize queue length**.
+The reward encourages **shorter vehicle queues**.
 
 ```
 reward = - average halting vehicles per lane
@@ -204,7 +267,7 @@ Implementation:
 reward = -total_queue / number_of_lanes
 ```
 
-This encourages the agent to **reduce waiting vehicles**.
+Agents therefore learn policies that **reduce congestion**.
 
 ---
 
@@ -215,10 +278,12 @@ Each agent uses a **Deep Q-Network (DQN)**.
 Architecture:
 
 ```
-Input layer: state dimension
-Hidden layer: 128 neurons (ReLU)
-Hidden layer: 128 neurons (ReLU)
-Output layer: Q-values for actions
+Input Layer: state dimension
+
+Hidden Layer: 128 neurons (ReLU)
+Hidden Layer: 128 neurons (ReLU)
+
+Output Layer: Q-values for actions
 ```
 
 Implemented using **PyTorch**.
@@ -229,7 +294,7 @@ Implemented using **PyTorch**.
 
 ## Experience Replay
 
-Agents store transitions in a replay buffer:
+Transitions are stored as:
 
 ```
 (state, action, reward, next_state, done)
@@ -241,9 +306,9 @@ Mini-batches are sampled randomly during training.
 
 ## Target Network
 
-A separate **target network** stabilizes Q-learning.
+A **target network** stabilizes learning.
 
-The target network is updated periodically:
+Periodically updated using:
 
 ```
 target_model.load_state_dict(model.state_dict())
@@ -253,45 +318,38 @@ target_model.load_state_dict(model.state_dict())
 
 ## Exploration Strategy
 
-The agents use **epsilon-greedy exploration**:
+Agents use **epsilon-greedy exploration**.
 
 ```
-epsilon starts at 1.0
-epsilon decays gradually
+epsilon start = 1.0
+epsilon decay = gradual
 minimum epsilon = 0.1
 ```
 
-This allows the agent to explore early and exploit learned behavior later.
+This balances **exploration and exploitation**.
 
 ---
 
 # Training Loop
 
-Each episode follows this sequence:
+Each episode performs:
 
 1. Generate new vehicle routes
-
 2. Start SUMO simulation
-
-3. Initialize states
-
-4. Every fixed interval:
-
-   * Agents select actions
-   * Traffic lights update
-   * Rewards are calculated
-   * Transitions stored in replay buffer
-   * Neural network training step performed
-
-5. Simulation ends when all vehicles exit
-
-6. Next episode begins
+3. Initialize traffic states
+4. Agents choose actions periodically
+5. Traffic lights update phases
+6. Rewards are computed
+7. Transitions stored in replay buffers
+8. Neural networks trained
+9. Simulation ends when all vehicles exit
+10. Next episode begins
 
 ---
 
 # Logging
 
-Training prints periodic statistics such as:
+Training outputs periodic statistics:
 
 ```
 Step: <time>
@@ -301,30 +359,29 @@ Epsilon: <value>
 Replay buffer size
 ```
 
-Models are periodically saved to disk.
+Models are saved automatically during training.
 
 ---
 
 # Future Work
 
-Possible improvements:
+Potential improvements include:
 
-* Coordinated multi-intersection learning
-* Larger traffic networks (5×5 or city maps)
-* Advanced reward functions
-* Graph neural networks for intersection coordination
-* Emergency vehicle prioritization
-* Evaluation against fixed-time traffic signals
+- Coordinated **multi-intersection learning**
+- Larger road networks (5×5 grids or real maps)
+- More advanced reward functions
+- Comparison with **fixed-time traffic signals**
+- **Green Wave traffic coordination** to synchronize signals along corridors for smoother traffic flow for emergency vehicles
 
 ---
 
 # References
 
-SUMO Documentation
+SUMO Documentation  
 https://sumo.dlr.de/docs/
 
-TraCI Documentation
+TraCI Documentation  
 https://sumo.dlr.de/docs/TraCI.html
 
-Deep Q-Learning
+Deep Q-Learning (Nature)  
 https://www.nature.com/articles/nature14236
