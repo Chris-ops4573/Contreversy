@@ -54,7 +54,7 @@ class Agent:
 
         self.gamma = 0.99
         self.epsilon = 1.0
-        self.eps_decay = 0.9998
+        self.eps_decay = 0.99995
         self.eps_min = 0.1
 
         self.batch_size = 64
@@ -64,7 +64,7 @@ class Agent:
 
     def select_action(self, state):
         if random.random() < self.epsilon:
-            return random.randint(0, 1)
+            return random.randint(0, 3)
 
         state = torch.tensor(state).float()
 
@@ -99,9 +99,6 @@ class Agent:
             self.target_model.load_state_dict(self.model.state_dict())
 
             print(f"Steps: {self.train_steps}, epsilon: {self.epsilon:.4f}, buffer: {len(self.buffer)}, Loss: {loss.item():.4f}")
-
-        if self.train_steps % 100000 == 0:
-            torch.save(self.model.state_dict(), f"models/traffic_model{self.name}.pt")
 
         if self.epsilon > self.eps_min:
             self.epsilon *= self.eps_decay

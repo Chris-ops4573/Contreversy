@@ -4,6 +4,6 @@ __pycache__/
 models/
 traffic_model*
 
-routes.rou.xml
-trips.trips.xml
-grid_3.net.xml
+*.xml
+*.net.xml
+*.osm

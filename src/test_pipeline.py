@@ -2,60 +2,82 @@ import torch
 import traci
 from traci.exceptions import FatalTraCIError
 
-from helper import get_reward, get_state, change_state, get_traffic_lights, manual_configure_TL, generate_routes, start_sumo
+from helper import get_reward, get_state, change_state, get_traffic_lights, manual_configure_TL, generate_routes, start_sumo, build_structure
 from neural_net import TrafficAgent, Agent, ReplayBuffer
 
-def load_agents(traffic_lights):
+def load_agents(traffic_lights, structures):
+    type_models = {}
     agents = {}
 
     for tl in traffic_lights:
-        state_dim = len(get_state(tl))
-        model = TrafficAgent(state_dim, 2)
-        model.load_state_dict(torch.load(f"models/traffic_model{tl}.pt"))
-        model.eval()
+        itype = structures[tl]
 
-        target = TrafficAgent(state_dim, 2)
-        buffer = ReplayBuffer(1)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.00005)
-        agent = Agent(model, target, optimizer, buffer, tl)
+        if itype not in type_models:
+            state_dim = len(get_state(tl, 0))
+            model = TrafficAgent(state_dim, 4)
+            model.load_state_dict(torch.load(f"models/og_{itype}.pt"))
+            model.eval()
+
+            target = TrafficAgent(state_dim, 4)
+            buffer = ReplayBuffer(1)
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.00005)
+            type_models[itype] = (model, target, optimizer, buffer)
+
+        model, target, optimizer, buffer = type_models[itype]
+        agent = Agent(model, target, optimizer, buffer, itype)
         agent.epsilon = 0
         agents[tl] = agent
 
     return agents
 
 try:
-    generate_routes()
     start_sumo()
 
     traffic_lights = get_traffic_lights()
     manual_configure_TL(traffic_lights)
-    agents = load_agents(traffic_lights)
 
-    states = {tl: get_state(tl) for tl in traffic_lights}
+    structures = {tl: build_structure(tl) for tl in traffic_lights}
+    agents = load_agents(traffic_lights, structures)
 
-    reward_sum = 0
-    reward_count = 0
+    spent_duration = {tl: 0 for tl in traffic_lights}
+    states = {tl: get_state(tl, spent_duration[tl]) for tl in traffic_lights}
+
+    reward_sum_3 = 0
+    reward_count_3 = 0
+    reward_sum_4 = 0
+    reward_count_4 = 0
+
     step = 10
     time = 0
 
-    while traci.simulation.getMinExpectedNumber() > 0:
+    while traci.simulation.getMinExpectedNumber() > 0 and time < 30000:
         if time % step == 0:
 
-            actions = {}
+            actions = {tl: agents[tl].select_action(states[tl]) for tl in traffic_lights}
+
             for tl in traffic_lights:
-                actions[tl] = agents[tl].select_action(states[tl])
+                if actions[tl] == 0:
+                    spent_duration[tl] = 0
+                else:
+                    spent_duration[tl] += step
                 change_state(tl, actions[tl])
-            
-            next_states = {tl: get_state(tl) for tl in traffic_lights}
+
+            next_states = {tl: get_state(tl, spent_duration[tl]) for tl in traffic_lights}
             rewards = {tl: get_reward(tl) for tl in traffic_lights}
 
-            reward_sum += sum(rewards.values())
-            reward_count += len(rewards)
+            for tl in traffic_lights:
+                if structures[tl] == "three":
+                    reward_sum_3 += rewards[tl]
+                    reward_count_3 += 1
+                else:
+                    reward_sum_4 += rewards[tl]
+                    reward_count_4 += 1
 
-            if time % 1000 == 0:
-                print(f"Step: {time}, Average reward: {reward_sum / reward_count:.4f}")
-                reward_sum = 0
-                reward_count = 0
+            if time % 1000 == 0 and time > 0:
+                avg_3 = reward_sum_3 / reward_count_3 if reward_count_3 > 0 else 0
+                avg_4 = reward_sum_4 / reward_count_4 if reward_count_4 > 0 else 0
+                print(f"Step: {time}, Average reward (4): {avg_4:.4f}, Average reward (3): {avg_3:.4f}")
+                reward_sum_3 = reward_sum_4 = reward_count_3 = reward_count_4 = 0
 
             states = next_states
 

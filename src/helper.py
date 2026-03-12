@@ -2,6 +2,7 @@ import traci
 
 import subprocess
 import os
+import math
 
 #Sumo helpers start here
 
@@ -12,10 +13,10 @@ def generate_routes():
     subprocess.run([
         "python", 
         random_trips,
-        "-n", "SUMO/grid_3.net.xml",
-        "-r", "SUMO/routes.rou.xml",
-        "-o", "SUMO/trips.trips.xml",
-        "-e", "30000",
+        "-n", "SUMO/grid_real_3.net.xml",
+        "-r", "SUMO/routes_real_3.rou.xml",
+        "-o", "SUMO/trips_real_3.trips.xml",
+        "-e", "50000",
         "--period", "4",
         "--validate"
     ])
@@ -23,7 +24,7 @@ def generate_routes():
 def start_sumo():
     sudoCmd = [
         "sumo", 
-         "-c", "SUMO/sim_3.sumocfg",
+         "-c", "SUMO/sim_real_3.sumocfg",
          "--no-step-log",
         "--no-warnings",
         "--start"
@@ -47,49 +48,70 @@ def get_vehicle_mapping(traffic_lights):
 
     return vehicle_mapping
 
-def get_downstream_traffic(lane):
-    count = 0
+def build_structure(traffic_light):
+    lanes = list(set(traci.trafficlight.getControlledLanes(traffic_light)))
 
-    links = traci.lane.getLinks(lane)
+    if len(lanes) == 3:
+        return "three"
+    else:
+        return "four"
 
-    required_lane = '_'
-    for link in links:
-        if link[6] == 's':
-            required_lane = link[0]
-            break 
+def get_lane_structure(traffic_light):
+    links = traci.trafficlight.getControlledLinks(traffic_light)
+    
+    incoming = []
+    outgoing = []
+    
+    for link_group in links:
+        for link in link_group:
+            inc = link[0]   
+            out = link[1]   
+            
+            if inc and inc not in incoming:
+                incoming.append(inc)
+            if out and out not in outgoing:
+                outgoing.append(out)
+    
+    return incoming, outgoing
 
-    if required_lane != '_':
-        count += traci.lane.getLastStepOccupancy(required_lane)
-
-    return count 
+def get_lane_capacity(lane):
+    length = traci.lane.getLength(lane)
+    return max(1, length / 7.5)
 
 #Neural helpers start here
 
-def get_state(traffic_light):
-    lanes = list(set(traci.trafficlight.getControlledLanes(traffic_light)))
+def get_state(traffic_light, spent_duration):
+    incoming, outgoing = get_lane_structure(traffic_light)
 
-    halting = []
-    downstream_occupancy = []
-    
-    for lane in sorted(lanes):  
-        halting.append(traci.lane.getLastStepHaltingNumber(lane))
-        downstream_occupancy.append(get_downstream_traffic(lane))
+    incoming_length = []
+    outgoing_length = []
+
+    for lane in incoming:
+        incoming_length.append(traci.lane.getLastStepVehicleNumber(lane))
+
+    for lane in outgoing:
+        outgoing_length.append(traci.lane.getLastStepVehicleNumber(lane))
 
     phase = traci.trafficlight.getPhase(traffic_light)
-    
-    return halting + downstream_occupancy + [phase]
+
+    return incoming_length + outgoing_length + [phase]
 
 def change_state(traffic_light, action):
-    if(action == 1):
-        phase = traci.trafficlight.getPhase(traffic_light)
-        traci.trafficlight.setPhase(traffic_light, (phase + 1) % 4)
+        traci.trafficlight.setPhase(traffic_light, action)
         traci.trafficlight.setPhaseDuration(traffic_light, 30000)
 
 def get_reward(traffic_light):
-    lanes = set(traci.trafficlight.getControlledLanes(traffic_light))
+    incoming, outgoing = get_lane_structure(traffic_light)
     
-    total_queue = 0
-    for lane in lanes:
-        total_queue += traci.lane.getLastStepHaltingNumber(lane)
+    pressure = 0
+    for inc in incoming:
+        for out in outgoing:
+            x_inc = traci.lane.getLastStepVehicleNumber(inc)
+            x_out = traci.lane.getLastStepVehicleNumber(out)
+
+            x_max_inc = get_lane_capacity(inc)
+            x_max_out = get_lane_capacity(out)
+
+            pressure += abs(x_inc/x_max_inc - x_out/x_max_out)
     
-    return -total_queue / len(lanes)
+    return -pressure
