@@ -8,6 +8,7 @@ from neural_net import TrafficAgent, ReplayBuffer, Agent
 
 try:
     os.makedirs("models", exist_ok=True)
+    os.makedirs("models/real", exist_ok=True)
     generate_routes()
     start_sumo()
     traffic_lights = get_traffic_lights()
@@ -42,6 +43,7 @@ try:
     episodes = 1000
 
     while episodes:
+        generate_routes()
         start_sumo()
 
         traffic_lights = get_traffic_lights()
@@ -94,11 +96,11 @@ try:
                     print(f"Step: {time}, Average reward (4): {avg_4}, Average reward (3): {avg_3}")
 
                     if best_rewards["three"] < avg_3:
-                        torch.save(type_models["three"][0].state_dict(), f"models/traffic_model_three.pt")
+                        torch.save(type_models["three"][0].state_dict(), f"models/traffic_model_4tl_three.pt")
                         best_rewards["three"] = avg_3
 
                     if best_rewards["four"] < avg_4:
-                        torch.save(type_models["four"][0].state_dict(), f"models/traffic_model_four.pt")
+                        torch.save(type_models["four"][0].state_dict(), f"models/real/traffic_model_4tl_four.pt")
                         best_rewards["four"] = avg_4
 
                     reward_sum_4 = 0

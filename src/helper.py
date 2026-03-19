@@ -13,19 +13,19 @@ def generate_routes():
     subprocess.run([
         "python", 
         random_trips,
-        "-n", "SUMO/grid_real_3.net.xml",
-        "-r", "SUMO/routes_real_3.rou.xml",
-        "-o", "SUMO/trips_real_3.trips.xml",
-        "-e", "50000",
-        "--period", "4",
+        "-n", "SUMO/grid_4.net.xml",
+        "-r", "SUMO/routes_4.rou.xml",
+        "-o", "SUMO/trips_4.trips.xml",
+        "-e", "30000",
+        "--period", "3",
         "--validate"
     ])
 
 def start_sumo():
     sudoCmd = [
         "sumo", 
-         "-c", "SUMO/sim_real_3.sumocfg",
-         "--no-step-log",
+        "-c", "SUMO/sim_4.sumocfg",
+        "--no-step-log",
         "--no-warnings",
         "--start"
     ]
@@ -80,7 +80,7 @@ def get_lane_capacity(lane):
 
 #Neural helpers start here
 
-def get_state(traffic_light, spent_duration):
+def get_state(traffic_light):
     incoming, outgoing = get_lane_structure(traffic_light)
 
     incoming_length = []
